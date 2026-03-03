@@ -1,0 +1,29 @@
+{
+  "name": "near-x402-gateway",
+  "version": "1.0.0",
+  "description": "x402 paywalled REST API for NEAR Protocol data",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@x402/core": "^2.5.0",
+    "@x402/evm": "^2.3.0",
+    "@x402/express": "^2.5.0",
+    "@x402/svm": "^2.5.0",
+    "express": "^4.21.0",
+    "better-sqlite3": "^11.0.0",
+    "near-api-js": "^5.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0"
+  }
+}
