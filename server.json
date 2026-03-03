@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.trevorflipper/near-solana-blockchain-api",
-  "title": "NEAR, Solana & Base Blockchain Data Gateway",
-  "description": "24 NEAR + Solana + Base blockchain endpoints with x402 USDC micropayments",
-  "version": "3.0.0",
+  "title": "NEAR, Solana, Base & Lighter Intelligence API",
+  "description": "Multi-chain blockchain data + Lighter DEX intelligence via x402 USDC micropayments",
+  "version": "4.0.0",
   "remotes": [
     {
       "type": "streamable-http",

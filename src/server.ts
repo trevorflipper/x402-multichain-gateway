@@ -10,6 +10,7 @@ import { SolanaClient } from "./solana-client.js";
 import { SolanaService } from "./solana-service.js";
 import { BaseClient } from "./base-client.js";
 import { BaseService } from "./base-service.js";
+import { LighterService } from "./lighter-service.js";
 import * as analytics from "./analytics.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
 import { OPENAPI_SPEC, AGENT_CARD, AI_PLUGIN, LLMS_TXT } from "./discovery.js";
@@ -58,6 +59,10 @@ const solanaService = new SolanaService(solanaClient);
 
 const baseClient = new BaseClient();
 const baseService = new BaseService(baseClient);
+
+// ─── Lighter Intelligence ────────────────────────────────────────────────────
+
+const lighterService = new LighterService();
 
 // ─── Express App ─────────────────────────────────────────────────────────────
 
@@ -152,10 +157,10 @@ app.get("/health", (_req, res) => {
 app.get("/", (_req, res) => {
   res.json({
     name: "x402 Blockchain Data API",
-    version: "3.0.0",
-    description: "Pay-per-call multi-chain blockchain data API powered by x402 (NEAR, Solana & Base)",
+    version: "4.0.0",
+    description: "Pay-per-call multi-chain blockchain data + Lighter DEX intelligence API powered by x402",
     mode: FREE_MODE ? "free (no wallet configured)" : "paid",
-    total_endpoints: 24,
+    total_endpoints: 30,
     chains: {
       near: {
         endpoints: {
@@ -191,6 +196,17 @@ app.get("/", (_req, res) => {
           "GET /api/base/block/latest": { price: "$0.002", description: "Latest block info" },
           "GET /api/base/gas": { price: "$0.001", description: "Current gas price" },
           "GET /api/base/network/stats": { price: "$0.002", description: "Network stats" },
+        },
+      },
+      lighter: {
+        description: "Proprietary Lighter DEX intelligence — unique data not available elsewhere",
+        endpoints: {
+          "GET /api/lighter/spreads/current": { price: "$0.01", description: "Current bid-ask spreads (Lighter vs Hyperliquid)" },
+          "GET /api/lighter/spreads/history": { price: "$0.03", description: "Historical spread timeseries (5-min, up to 7 days)" },
+          "GET /api/lighter/depth/current": { price: "$0.01", description: "Current order book depth snapshot (0.3% band)" },
+          "GET /api/lighter/whales": { price: "$0.02", description: "Live whale positions, bias, PnL, exposure" },
+          "GET /api/lighter/signals": { price: "$0.02", description: "Signal wallet scores (S/A/B tier)" },
+          "GET /api/lighter/xlp": { price: "$0.02", description: "XLP experimental LP: collateral, volume, fees, PnL" },
         },
       },
     },
@@ -238,6 +254,13 @@ const PRICE_MAP: Record<string, string> = {
   "GET /api/base/block/latest": "$0.002",
   "GET /api/base/gas": "$0.001",
   "GET /api/base/network/stats": "$0.002",
+  // Lighter intelligence endpoints (premium)
+  "GET /api/lighter/spreads/current": "$0.01",
+  "GET /api/lighter/spreads/history": "$0.03",
+  "GET /api/lighter/depth/current": "$0.01",
+  "GET /api/lighter/whales": "$0.02",
+  "GET /api/lighter/signals": "$0.02",
+  "GET /api/lighter/xlp": "$0.02",
 };
 
 // ─── Bazaar Discovery Metadata ────────────────────────────────────────────────
@@ -349,6 +372,27 @@ const ROUTE_DISCOVERY: Record<string, ReturnType<typeof declareDiscoveryExtensio
   }),
   "GET /api/base/network/stats": declareDiscoveryExtension({
     output: { example: { chain_id: 8453, block_number: 25000000, gas_price_gwei: 0.005 } },
+  }),
+  // Lighter intelligence endpoints
+  "GET /api/lighter/spreads/current": declareDiscoveryExtension({
+    output: { example: { updated_at: "2026-03-03 13:00:00", symbols: { BTC: { lighter_spread_bps: 0.015, hl_spread_bps: 0.15, spread_diff_bps: -0.13 } }, granularity: "5min" } },
+  }),
+  "GET /api/lighter/spreads/history": declareDiscoveryExtension({
+    input: { symbol: "BTC", hours: 24 },
+    inputSchema: { properties: { symbol: { type: "string", description: "Trading pair symbol (BTC, ETH, SOL, HYPE, LIT)" }, hours: { type: "integer", description: "Hours of history (max 168)" } }, required: ["symbol"] },
+    output: { example: { symbol: "BTC", hours: 24, data_points: 288, data: [{ timestamp: "2026-03-03 12:00:00", lighter_spread_bps: 0.015, hl_spread_bps: 0.15 }] } },
+  }),
+  "GET /api/lighter/depth/current": declareDiscoveryExtension({
+    output: { example: { updated_at: "2026-03-03T13:43:27Z", band_pct: 0.3, markets: { BTC: { lighter_mid: 66812.55, hl_mid: 66834.5, deeper_venue: "hyperliquid" } } } },
+  }),
+  "GET /api/lighter/whales": declareDiscoveryExtension({
+    output: { example: { count: 50, whales: [{ address: "0x1234...", bias: "long", total_value: 5000000, net_exposure: 2000000 }] } },
+  }),
+  "GET /api/lighter/signals": declareDiscoveryExtension({
+    output: { example: { count: 100, tiers: { S: 5, A: 20, B: 75 }, signals: [{ address: "0x1234...", tier: "S", total_score: 95 }] } },
+  }),
+  "GET /api/lighter/xlp": declareDiscoveryExtension({
+    output: { example: { snapshot: { timestamp: "2026-03-03T12:00:00Z", per_market: [] }, history_entries: 50 } },
   }),
 };
 
@@ -686,6 +730,76 @@ app.get("/api/base/gas", async (_req, res) => {
 app.get("/api/base/network/stats", async (_req, res) => {
   try {
     const data = await baseService.getNetworkStats();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// ─── Lighter Intelligence Route Handlers ─────────────────────────────────────
+
+// Current spreads
+app.get("/api/lighter/spreads/current", (_req, res) => {
+  try {
+    const data = lighterService.getCurrentSpreads();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// Historical spread timeseries
+app.get("/api/lighter/spreads/history", (req, res) => {
+  try {
+    const symbol = (req.query.symbol as string) || "BTC";
+    const hours = Math.min(parseInt(req.query.hours as string, 10) || 24, 168);
+    const data = lighterService.getSpreadHistory(symbol, hours);
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// Current depth snapshot
+app.get("/api/lighter/depth/current", (_req, res) => {
+  try {
+    const data = lighterService.getCurrentDepth();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// Whale positions
+app.get("/api/lighter/whales", async (_req, res) => {
+  try {
+    const data = await lighterService.getWhales();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// Signal scores
+app.get("/api/lighter/signals", async (_req, res) => {
+  try {
+    const data = await lighterService.getSignals();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// XLP experimental LP data
+app.get("/api/lighter/xlp", (_req, res) => {
+  try {
+    const data = lighterService.getXlp();
     res.json(data);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

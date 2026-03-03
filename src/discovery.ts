@@ -16,9 +16,9 @@ const BASE_URL = process.env.X402_PUBLIC_URL || "https://ironflip.duckdns.org";
 export const OPENAPI_SPEC = {
   openapi: "3.1.0",
   info: {
-    title: "x402 Multi-Chain Blockchain API",
-    version: "3.0.0",
-    description: "Pay-per-call blockchain data API for NEAR Protocol, Solana, and Base (Ethereum L2). All data endpoints require x402 USDC micropayment on Solana or Base. No API keys, no signup — just attach a payment header.",
+    title: "x402 Multi-Chain Blockchain & Lighter Intelligence API",
+    version: "4.0.0",
+    description: "Pay-per-call blockchain data API for NEAR Protocol, Solana, and Base (Ethereum L2), plus proprietary Lighter DEX intelligence (spreads, depth, whales, signals, XLP). All data endpoints require x402 USDC micropayment on Solana or Base. No API keys, no signup — just attach a payment header.",
     contact: { email: "openclaw@proton.me" },
   },
   servers: [{ url: BASE_URL, description: "Production" }],
@@ -275,6 +275,65 @@ export const OPENAPI_SPEC = {
         responses: { "200": { description: "Network stats" }, "402": { description: "Payment required" } },
       },
     },
+    // Lighter Intelligence endpoints
+    "/api/lighter/spreads/current": {
+      get: {
+        operationId: "getLighterSpreadsCurrent",
+        summary: "Current Lighter vs Hyperliquid spreads",
+        description: "Returns current bid-ask spreads for BTC/ETH/SOL/HYPE/LIT on both Lighter and Hyperliquid, with spread_diff_bps showing which venue is tighter. 5-minute granularity from continuous collection. Price: $0.01 USDC.",
+        tags: ["Lighter Intelligence"],
+        responses: { "200": { description: "Current spread data" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/lighter/spreads/history": {
+      get: {
+        operationId: "getLighterSpreadsHistory",
+        summary: "Historical spread timeseries",
+        description: "Returns historical bid-ask spread timeseries for a symbol. 5-minute granularity, up to 7 days. Includes depth at 0.3% bands for both exchanges. Price: $0.03 USDC.",
+        tags: ["Lighter Intelligence"],
+        parameters: [
+          { name: "symbol", in: "query", required: true, schema: { type: "string", enum: ["BTC", "ETH", "SOL", "HYPE", "LIT"] }, description: "Trading pair symbol" },
+          { name: "hours", in: "query", schema: { type: "integer", maximum: 168, default: 24 }, description: "Hours of history (max 168 = 7 days)" },
+        ],
+        responses: { "200": { description: "Spread history timeseries" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/lighter/depth/current": {
+      get: {
+        operationId: "getLighterDepthCurrent",
+        summary: "Current order book depth snapshot",
+        description: "Returns current order book depth across all markets at 0.3% band, comparing Lighter and Hyperliquid. Shows which venue has deeper liquidity per market. Price: $0.01 USDC.",
+        tags: ["Lighter Intelligence"],
+        responses: { "200": { description: "Depth snapshot" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/lighter/whales": {
+      get: {
+        operationId: "getLighterWhales",
+        summary: "Lighter whale positions",
+        description: "Returns live whale positions on Lighter DEX — bias (long/short), total value, net exposure, unrealized PnL, and individual positions. Price: $0.02 USDC.",
+        tags: ["Lighter Intelligence"],
+        responses: { "200": { description: "Whale position data" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/lighter/signals": {
+      get: {
+        operationId: "getLighterSignals",
+        summary: "Lighter signal wallet scores",
+        description: "Returns signal wallet scores with S/A/B tier classification, total scores, and PnL metrics. S-tier wallets have historically strong performance. Price: $0.02 USDC.",
+        tags: ["Lighter Intelligence"],
+        responses: { "200": { description: "Signal score data" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/lighter/xlp": {
+      get: {
+        operationId: "getLighterXlp",
+        summary: "XLP experimental LP data",
+        description: "Returns XLP (experimental liquidity provider) data across 26 markets — collateral, volume share, fees earned, PnL, position direction. Includes snapshot + recent history. Price: $0.02 USDC.",
+        tags: ["Lighter Intelligence"],
+        responses: { "200": { description: "XLP LP data" }, "402": { description: "Payment required" } },
+      },
+    },
   },
   "x-x402-payment": [
     {
@@ -299,14 +358,14 @@ export const OPENAPI_SPEC = {
 // ─── A2A Agent Card ───────────────────────────────────────────────────────────
 
 export const AGENT_CARD = {
-  name: "x402 Multi-Chain Blockchain API",
-  description: "Pay-per-call blockchain data for NEAR Protocol, Solana, and Base (Ethereum L2). Returns account balances, token holdings, validators, staking positions, transactions, DeFi pools, gas prices, and token prices across 3 chains. All endpoints accept x402 USDC micropayments on Solana or Base — no API keys, no signup.",
+  name: "x402 Multi-Chain Blockchain & Lighter Intelligence API",
+  description: "Pay-per-call blockchain data for NEAR Protocol, Solana, and Base (Ethereum L2), plus proprietary Lighter DEX intelligence (spread analytics, order book depth, whale positions, signal wallets, XLP LP tracking). Returns account balances, token holdings, validators, staking positions, transactions, DeFi pools, and unique market microstructure data. All endpoints accept x402 USDC micropayments on Solana or Base — no API keys, no signup.",
   url: BASE_URL,
   provider: {
     organization: "OpenClaw",
     url: BASE_URL,
   },
-  version: "3.0.0",
+  version: "4.0.0",
   documentationUrl: `${BASE_URL}/openapi.json`,
   capabilities: {
     streaming: false,
@@ -418,6 +477,41 @@ export const AGENT_CARD = {
       tags: ["base", "network", "gas", "block", "l2"],
       examples: ["What is Base gas price?", "Show Base network stats", "Latest Base block?"],
     },
+    {
+      id: "lighter-spreads",
+      name: "Lighter vs Hyperliquid Spreads",
+      description: "Get current and historical bid-ask spreads comparing Lighter DEX and Hyperliquid. 5-minute granularity, up to 7 days of history.",
+      tags: ["lighter", "hyperliquid", "spreads", "market-microstructure", "dex"],
+      examples: ["Compare Lighter and Hyperliquid BTC spreads", "Show ETH spread history for 24 hours"],
+    },
+    {
+      id: "lighter-depth",
+      name: "DEX Order Book Depth",
+      description: "Get current order book depth comparison between Lighter and Hyperliquid at 0.3% band across all markets",
+      tags: ["lighter", "hyperliquid", "depth", "orderbook", "liquidity"],
+      examples: ["Which DEX has deeper BTC liquidity?", "Show current DEX depth comparison"],
+    },
+    {
+      id: "lighter-whales",
+      name: "Lighter Whale Positions",
+      description: "Get live whale positions on Lighter DEX — directional bias, total value, net exposure, and PnL",
+      tags: ["lighter", "whales", "positions", "smart-money", "alpha"],
+      examples: ["What are Lighter whales doing?", "Show whale positions on Lighter"],
+    },
+    {
+      id: "lighter-signals",
+      name: "Lighter Signal Wallets",
+      description: "Get tiered signal wallet scores (S/A/B) based on historical trading performance on Lighter DEX",
+      tags: ["lighter", "signals", "alpha", "wallets", "performance"],
+      examples: ["Show S-tier signal wallets on Lighter", "Which wallets have best track records?"],
+    },
+    {
+      id: "lighter-xlp",
+      name: "XLP Liquidity Provider Data",
+      description: "Get XLP experimental LP data — collateral, volume share, fees earned, PnL across 26 markets",
+      tags: ["lighter", "xlp", "liquidity", "lp", "market-making"],
+      examples: ["Show XLP LP performance", "How is XLP doing across markets?"],
+    },
   ],
 };
 
@@ -428,7 +522,7 @@ export const AI_PLUGIN = {
   name_for_human: "Blockchain Data API",
   name_for_model: "blockchain_data_x402",
   description_for_human: "NEAR, Solana & Base blockchain data via x402 micropayments.",
-  description_for_model: "API for querying NEAR Protocol, Solana, and Base (Ethereum L2) blockchain data. Use this to look up account balances (NEAR, SOL, or ETH on Base), token holdings (SPL or ERC-20), transaction details, validator information, staking positions, NFT tokens, DeFi liquidity pools, gas prices, token prices, and network statistics across 3 chains. All endpoints require x402 USDC payment on Solana mainnet or Base — send a payment header with each request. Prices range from $0.001 to $0.005 per call.",
+  description_for_model: "API for querying NEAR Protocol, Solana, and Base (Ethereum L2) blockchain data, plus proprietary Lighter DEX intelligence (spread analytics, order book depth, whale positions, signal wallets, XLP LP tracking). Use this to look up account balances, token holdings, transaction details, validator information, staking positions, NFT tokens, DeFi pools, and unique market microstructure data comparing Lighter and Hyperliquid. All endpoints require x402 USDC payment on Solana mainnet or Base — send a payment header with each request. Blockchain endpoints: $0.001-$0.005. Lighter intelligence: $0.01-$0.03 per call.",
   auth: { type: "none" },
   api: {
     type: "openapi",
@@ -442,11 +536,11 @@ export const AI_PLUGIN = {
 
 // ─── llms.txt ─────────────────────────────────────────────────────────────────
 
-export const LLMS_TXT = `# x402 Multi-Chain Blockchain API
+export const LLMS_TXT = `# x402 Multi-Chain Blockchain & Lighter Intelligence API
 
-> Pay-per-call NEAR Protocol, Solana, and Base (Ethereum L2) blockchain data. All endpoints accept x402 USDC micropayments on Solana or Base. No API keys, no signup — just attach a payment header.
+> Pay-per-call NEAR Protocol, Solana, Base blockchain data, and proprietary Lighter DEX intelligence. All endpoints accept x402 USDC micropayments on Solana or Base. No API keys, no signup — just attach a payment header.
 
-This API serves real-time blockchain data across three chains (NEAR, Solana & Base) with 24 endpoints. Each call costs $0.001-$0.005 USDC via the x402 payment protocol. Agents pay by including an X-PAYMENT header with a USDC transaction proof on Solana or Base.
+This API serves real-time blockchain data across three chains (NEAR, Solana & Base) plus unique Lighter DEX market intelligence with 30 endpoints. Blockchain endpoints cost $0.001-$0.005 USDC. Lighter intelligence endpoints cost $0.01-$0.03 USDC (premium, unique data). Agents pay by including an X-PAYMENT header with a USDC transaction proof on Solana or Base.
 
 ## NEAR Protocol Endpoints (8)
 
@@ -480,6 +574,17 @@ This API serves real-time blockchain data across three chains (NEAR, Solana & Ba
 - [Latest Block](${BASE_URL}/api/base/block/latest): GET — Block number, timestamp, tx count, gas. $0.002
 - [Gas Price](${BASE_URL}/api/base/gas): GET — Current gas price in gwei. $0.001
 - [Network Stats](${BASE_URL}/api/base/network/stats): GET — Chain ID, block number, gas price. $0.002
+
+## Lighter DEX Intelligence Endpoints (6) — Premium
+
+Proprietary data from continuous collection (5-min granularity, 22+ days of history). This data is unique — no other API provides structured Lighter vs Hyperliquid spread/depth comparisons.
+
+- [Current Spreads](\${BASE_URL}/api/lighter/spreads/current): GET — Current bid-ask spreads for BTC/ETH/SOL/HYPE/LIT on both venues. $0.01
+- [Spread History](\${BASE_URL}/api/lighter/spreads/history?symbol=BTC&hours=24): GET — Historical spread timeseries, 5-min granularity, up to 7 days. $0.03
+- [Current Depth](\${BASE_URL}/api/lighter/depth/current): GET — Order book depth at 0.3% band, both exchanges, all markets. $0.01
+- [Whale Positions](\${BASE_URL}/api/lighter/whales): GET — Live whale positions, bias, PnL, net exposure. $0.02
+- [Signal Scores](\${BASE_URL}/api/lighter/signals): GET — Tiered signal wallet scores (S/A/B), performance metrics. $0.02
+- [XLP LP Data](\${BASE_URL}/api/lighter/xlp): GET — XLP experimental LP across 26 markets: collateral, volume, fees, PnL. $0.02
 
 ## Payment
 
